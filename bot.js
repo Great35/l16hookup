@@ -3,6 +3,19 @@ import { Telegraf, session, Markup } from 'telegraf';
 import { MongoClient } from 'mongodb';
 
 dotenv.config();
+import express from "express";
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("Bot is running...");
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(session()); // Enable session middleware
