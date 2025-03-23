@@ -399,21 +399,23 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         );
 
         // ✅ Notify the user with the disliked user's name
-        await ctx.reply(`👎 You disliked *${dislikedUserName}*. Finding the next match...`, { parse_mode: "Markdown" });
+        await ctx.reply(
+            `👎 You disliked *${dislikedUserName}*.`,
+            { parse_mode: "Markdown" }
+        );
 
-        // ✅ Automatically find the next match
-        await findNextMatch(ctx);
+        // ✅ Instead of auto-finding, show the "Find Your Next Fling" button
+        await ctx.reply(
+            "🔍 Ready for the next match?",
+            Markup.inlineKeyboard([
+                [Markup.button.callback("🔍 Find Your Next Fling", "find_match")],
+            ])
+        );
     } catch (error) {
         console.error("❌ Error in dislike action:", error);
         ctx.reply("🚨 An error occurred. Try again.");
     }
 });
-
-// ✅ Handle Find Match Button
-bot.action("find_match", async (ctx) => {
-    await findNextMatch(ctx);
-});
-
 
 // 🚀 Launch the bot
 bot.launch().then(() => {
