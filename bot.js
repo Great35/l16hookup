@@ -423,7 +423,8 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
 
         // Otherwise, auto-find next match
         await ctx.reply("❌ You disliked this profile. Finding another match...");
-        await findNextMatch(ctx);
+        await findNextMatchV2(ctx);
+;
     } catch (error) {
         console.error("Error handling dislike:", error);
         ctx.reply("🚨 An error occurred while processing your dislike. Please try again.");
