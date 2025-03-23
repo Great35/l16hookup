@@ -237,164 +237,140 @@ async function sendMatchProfile(ctx, user, match) {
 }
 
 // 🟢 Handle Like and Dislike Actions
-bot.action(/^like_(.*)$/, async (ctx) => {
-    const likedUserId = parseInt(ctx.match[1]);
-    let user;
-    try {
-        user = await usersCollection.findOne({ userId: ctx.from.id });
-    } catch (error) {
-        console.error("❌ Database Error fetching user:", error);
-        return ctx.reply("⚠️ Oops! Something went wrong. Try again later.");
-    }
-    
-    if (!user) return;
-
-    if (user.swipeCount <= 0 && !user.isSubscribed) {
-        return ctx.reply(
-            "🔒 You've reached your daily swipe limit! Upgrade to unlimited swipes.",
-            Markup.inlineKeyboard([
-                [Markup.button.url("🔥 Upgrade Now", "https://t.me/YourOtherBotUsername")]
-            ])
-        );
-    }
-    
-    await usersCollection.updateOne(
-    { userId: ctx.from.id },
-    { $push: { likedUsers: likedUserId }, $inc: { swipeCount: user.isSubscribed ? 0 : -1 } }
-);
-
-// Fetch both users
-const likedUser = await usersCollection.findOne({ userId: likedUserId });
-const currentUser = await usersCollection.findOne({ userId: ctx.from.id });
-
-if (likedUser.likedUsers.includes(ctx.from.id)) {
-    let matchMessageForUser = `🎉 *It's a match!* You and *${likedUser.name}* are into each other!`;
-    let matchMessageForLikedUser = `🎉 *It's a match!* You and *${currentUser.name}* are into each other!`;
-
-    // Check if the current user is subscribed
-    // Show username ONLY if the user is subscribed AND a match is found
-if (currentUser.isSubscribed) {
-    matchMessageForUser += `\n\n🔗 *Username:* @${likedUser.username}`;
-} else {
-    matchMessageForUser += `\n\n💎 *Upgrade to premium* to unlock usernames and chat!`;
-}
-
-// Add "Upgrade" button for non-subscribed users
-const upgradeButton = Markup.inlineKeyboard([
-    [Markup.button.url("💎 Upgrade to Premium", "https://t.me/YourPaymentBotUsername")]
-]);
-
-// Send match notification with button (if not subscribed)
-await ctx.telegram.sendPhoto(
-    ctx.from.id,
-    likedUser.profilePic,
-    {
-        caption: matchMessageForUser,
-        parse_mode: "Markdown",
-        reply_markup: currentUser.isSubscribed ? null : upgradeButton
-    }
-);
-
-
-    if (likedUser.isSubscribed) {
-        matchMessageForLikedUser += `\n\n🔗 Username: [@${currentUser.username}](tg://user?id=${currentUser.userId})`;
-    } else {
-        matchMessageForLikedUser += `\n\n💎 *Upgrade to premium* to unlock usernames and chat!`;
-    }
-
-    // Buttons
-    const chatNowButtonForUser = Markup.inlineKeyboard([
-        [Markup.button.url("💬 Chat Now", `tg://user?id=${likedUser.userId}`)]
-    ]);
-
-    const chatNowButtonForLikedUser = Markup.inlineKeyboard([
-        [Markup.button.url("💬 Chat Now", `tg://user?id=${currentUser.userId}`)]
-    ]);
-
-    // Send match notification to both users **with their profile images**
-    await ctx.telegram.sendPhoto(
-        ctx.from.id,
-        likedUser.profilePic,
-        {
-            caption: matchMessageForUser,
-            parse_mode: "Markdown",
-            reply_markup: chatNowButtonForUser
-        }
-    );
-
-    await ctx.telegram.sendPhoto(
-        likedUser.userId,
-        currentUser.profilePic,
-        {
-            caption: matchMessageForLikedUser,
-            parse_mode: "Markdown",
-            reply_markup: chatNowButtonForLikedUser
-        }
-    );
-
-    // **Auto Find Another Match after 5 seconds**
-    setTimeout(async () => {
-        await findNextMatch(ctx);
-    }, 5000);
-}
 const matchAttempts = {}; // Track auto-match count for each user
 
-async function findNextMatch(ctx) {
-    const userId = ctx.from.id;
+bot.action(/^like_(.*)$/, async (ctx) => {
+    try {
+        const likedUserId = parseInt(ctx.match[1]);
+        const userId = ctx.from.id;
 
-    // Initialize or increment auto-match count
-    if (!matchAttempts[userId]) {
-        matchAttempts[userId] = 0;
+        // Fetch the user
+        const currentUser = await usersCollection.findOne({ userId });
+        if (!currentUser) return ctx.reply("❌ Error: User not found.");
+
+        // Check if swipe limit is reached (for non-subscribers)
+        if (currentUser.swipeCount <= 0 && !currentUser.isSubscribed) {
+            return ctx.reply(
+                "🔒 You've reached your daily swipe limit! Upgrade to unlimited swipes.",
+                Markup.inlineKeyboard([
+                    [Markup.button.url("🔥 Upgrade Now", "https://t.me/YourOtherBotUsername")]
+                ])
+            );
+        }
+
+        // Update the user's liked users list
+        await usersCollection.updateOne(
+            { userId },
+            { $push: { likedUsers: likedUserId }, $inc: { swipeCount: currentUser.isSubscribed ? 0 : -1 } }
+        );
+
+        // Fetch the liked user
+        const likedUser = await usersCollection.findOne({ userId: likedUserId });
+        if (!likedUser) return ctx.reply("❌ Error: Liked user not found.");
+
+        // Check if it's a match
+        if (likedUser.likedUsers.includes(userId)) {
+            let matchMessageForUser = `🎉 *It's a match!* You and *${likedUser.name}* are into each other!`;
+            let matchMessageForLikedUser = `🎉 *It's a match!* You and *${currentUser.name}* are into each other!`;
+
+            // Show username only for subscribed users
+            if (currentUser.isSubscribed) {
+                matchMessageForUser += `\n\n🔗 *Username:* @${likedUser.username}`;
+            } else {
+                matchMessageForUser += `\n\n💎 *Upgrade to premium* to unlock usernames and chat!`;
+            }
+
+            const upgradeButton = Markup.inlineKeyboard([
+                [Markup.button.url("💎 Upgrade to Premium", "https://t.me/YourPaymentBotUsername")]
+            ]);
+
+            // Send match notifications with profile images
+            await ctx.telegram.sendPhoto(
+                userId,
+                likedUser.profilePic,
+                {
+                    caption: matchMessageForUser,
+                    parse_mode: "Markdown",
+                    reply_markup: currentUser.isSubscribed ? null : upgradeButton
+                }
+            );
+
+            await ctx.telegram.sendPhoto(
+                likedUser.userId,
+                currentUser.profilePic,
+                {
+                    caption: matchMessageForLikedUser,
+                    parse_mode: "Markdown",
+                    reply_markup: Markup.inlineKeyboard([
+                        [Markup.button.url("💬 Chat Now", `tg://user?id=${currentUser.userId}`)]
+                    ])
+                }
+            );
+
+            // Auto-find next match after 5 seconds
+            setTimeout(async () => {
+                await findNextMatch(ctx);
+            }, 5000);
+            return;
+        }
+
+        // If not a match, find the next potential match
+        await findNextMatch(ctx);
+
+    } catch (error) {
+        console.error("❌ Error in like action:", error);
+        ctx.reply("⚠️ Oops! Something went wrong. Please try again.");
     }
+});
 
-    if (matchAttempts[userId] >= 3) {
-        // After 3 auto-matches, show button instead
-        await ctx.reply("💡 Need more matches? Click below to continue!", {
-            reply_markup: Markup.inlineKeyboard([
-                [Markup.button.callback("🔍 Find Another Match", "find_match")]
-            ])
+async function findNextMatch(ctx) {
+    try {
+        const userId = ctx.from.id;
+        if (!matchAttempts[userId]) matchAttempts[userId] = 0;
+
+        if (matchAttempts[userId] >= 3) {
+            await ctx.reply("💡 Need more matches? Click below to continue!", {
+                reply_markup: Markup.inlineKeyboard([
+                    [Markup.button.callback("🔍 Find Another Match", "find_match")]
+                ])
+            });
+
+            matchAttempts[userId] = 0;
+            return;
+        }
+
+        const currentUser = await usersCollection.findOne({ userId });
+        if (!currentUser) return ctx.reply("❌ Error: User not found.");
+
+        const nextMatch = await usersCollection.findOne({
+            userId: { $ne: userId },
+            likedUsers: { $ne: userId },
+            gender: currentUser.interestedIn,
+            interestedIn: currentUser.gender
         });
 
-        // Reset the counter for the next session
-        matchAttempts[userId] = 0;
-        return;
+        if (!nextMatch) return ctx.reply("😢 No more matches available. Try again later!");
+
+        await ctx.telegram.sendPhoto(
+            userId,
+            nextMatch.profilePic,
+            {
+                caption: `💘 *New Match Suggestion*:\n📛 Name: *${nextMatch.name}*\n🎂 Age: ${nextMatch.age}\n📍 Location: ${nextMatch.location}`,
+                parse_mode: "Markdown",
+                reply_markup: Markup.inlineKeyboard([
+                    [Markup.button.callback("❤️ Like", `like_${nextMatch.userId}`)],
+                    [Markup.button.callback("❌ Dislike", `dislike_${nextMatch.userId}`)]
+                ])
+            }
+        );
+
+        matchAttempts[userId]++;
+    } catch (error) {
+        console.error("❌ Error finding next match:", error);
+        ctx.reply("⚠️ Could not find the next match. Please try again.");
     }
-
-    const currentUser = await usersCollection.findOne({ userId });
-
-    if (!currentUser) {
-        return ctx.reply("❌ Error: User not found.");
-    }
-
-    // Find a new potential match
-    const nextMatch = await usersCollection.findOne({
-        userId: { $ne: userId }, // Not the same user
-        likedUsers: { $ne: userId } // Not already liked
-    });
-
-    if (!nextMatch) {
-        return ctx.reply("😢 No more matches available. Try again later!");
-    }
-
-    // Show the next match
-    await ctx.telegram.sendPhoto(
-        userId,
-        nextMatch.profilePic,
-        {
-            caption: `💘 *New Match Suggestion*:\n📛 Name: *${nextMatch.name}*\n🎂 Age: ${nextMatch.age}\n📍 Location: ${nextMatch.location}`,
-            parse_mode: "Markdown",
-            reply_markup: Markup.inlineKeyboard([
-                [Markup.button.callback("❤️ Like", `like_${nextMatch.userId}`)],
-                [Markup.button.callback("❌ Dislike", `dislike_${nextMatch.userId}`)]
-            ])
-        }
-    );
-
-    // Increase auto-match count
-    matchAttempts[userId]++;
 }
 
-});
 
 const userDislikeCounts = {}; // Track dislikes per user
 bot.action(/^dislike_(.*)$/, async (ctx) => {
