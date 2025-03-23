@@ -386,6 +386,14 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         // ✅ Fetch user data to check subscription status
         const currentUser = await usersCollection.findOne({ userId });
 
+        // ✅ Save the dislike in the database
+        await swipesCollection.insertOne({
+            userId,
+            targetUserId: dislikedUserId,
+            action: "dislike",
+            timestamp: new Date(),
+        });
+
         // ✅ Track dislikes per user
         if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
         userDislikeCounts[userId]++;
@@ -418,7 +426,6 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
 bot.action("find_match", async (ctx) => {
     await findNextMatch(ctx);
 });
-
 
 
 // 🚀 Launch the bot
