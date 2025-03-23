@@ -397,51 +397,107 @@ async function findNextMatch(ctx) {
 });
 
 const userDislikeCounts = {}; // Track dislikes per user
-
 bot.action(/^dislike_(.*)$/, async (ctx) => {
-    const dislikedUserId = parseInt(ctx.match[1]);
-    const userId = ctx.from.id;
+    try {
+        const dislikedUserId = parseInt(ctx.match[1]);
+        const userId = ctx.from.id;
 
-    // Update user's disliked users list
-    await usersCollection.updateOne(
-        { userId },
-        { $push: { dislikedUsers: dislikedUserId } }
-    );
-
-    // Get user details
-    const currentUser = await usersCollection.findOne({ userId });
-
-    // Track dislikes per user (reset if they start matching again)
-    if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
-    userDislikeCounts[userId]++;
-
-    if (userDislikeCounts[userId] % 5 === 0 && !currentUser.isSubscribed) {
-        // Every 5 dislikes, show an upgrade ad but allow them to continue
-        await ctx.reply(
-            "🚀 *Tired of swiping?* Unlock premium profiles and see who likes you instantly!",
-            {
-                parse_mode: "Markdown",
-                reply_markup: Markup.inlineKeyboard([
-                    [Markup.button.url("💎 Upgrade Now", "https://t.me/YourPaymentBot")]
-                ])
-            }
+        // Update user's disliked users list
+        await usersCollection.updateOne(
+            { userId },
+            { $push: { dislikedUsers: dislikedUserId } }
         );
-    }
 
-    if (userDislikeCounts[userId] % 3 === 0) {
-        // Every 3 dislikes, show "Find Another Match" button
-        return ctx.reply(
-            "⚡ You've disliked 3 profiles. Tap below to find another match!",
-            Markup.inlineKeyboard([
-                [Markup.button.callback("🔍 Find Another Match", "find_match")]
-            ])
-        );
-    }
+        // Get user details
+        const currentUser = await usersCollection.findOne({ userId });
 
-    // Otherwise, auto-find next match
-    ctx.reply("❌ You disliked this profile. Finding another match...");
-    await findNextMatch(ctx);
+        // Track dislikes per user (reset if they start matching again)
+        if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
+        userDislikeCounts[userId]++;
+
+        if (userDislikeCounts[userId] % 5 === 0 && !currentUser.isSubscribed) {
+            // Every 5 dislikes, show an upgrade ad but allow them to continue
+            await ctx.reply(
+                "🚀 *Tired of swiping?* Unlock premium profiles and see who likes you instantly!",
+                {
+                    parse_mode: "Markdown",
+                    reply_markup: Markup.inlineKeyboard([
+                        [Markup.button.url("💎 Upgrade Now", "https://t.me/YourPaymentBot")]
+                    ])
+                }
+            );
+        }
+
+        if (userDislikeCounts[userId] % 3 === 0) {
+            // Every 3 dislikes, show "Find Another Match" button
+            return ctx.reply(
+                "⚡ You've disliked 3 profiles. Tap below to find another match!",
+                {
+                    reply_markup: Markup.inlineKeyboard([
+                        [Markup.button.callback("🔍 Find Another Match", "find_match")]
+                    ])
+                }
+            );
+        }
+
+        // Otherwise, auto-find next match
+        await ctx.reply("❌ You disliked this profile. Finding another match...");
+        await findNextMatch(ctx);
+    } catch (error) {
+        console.error("Error handling dislike:", error);
+        ctx.reply("🚨 An error occurred while processing your dislike. Please try again.");
+    }
 });
+
+async function findNextMatch(ctx) {
+    try {
+        const userId = ctx.from.id;
+
+        // Get user details
+        const currentUser = await usersCollection.findOne({ userId });
+        if (!currentUser) return ctx.reply("❌ User not found.");
+
+        // Find the next match excluding disliked users
+        const nextMatch = await usersCollection.findOne({
+            userId: { $ne: userId },
+            gender: currentUser.interestedIn,
+            interestedIn: currentUser.gender,
+            userId: { $nin: currentUser.dislikedUsers || [] } // Exclude disliked users
+        });
+
+        if (!nextMatch) {
+            return ctx.reply("🚫 No more matches available. Check back later!");
+        }
+
+        // Send the match
+        sendMatch(ctx, nextMatch);
+    } catch (error) {
+        console.error("Error finding next match:", error);
+        ctx.reply("⚠️ Could not find the next match. Please try again.");
+    }
+}
+
+async function sendMatch(ctx, match) {
+    try {
+        const profileCaption = `💘 Match Found:
+📛 Name: ${match.name}
+🎂 Age: ${match.age}
+📍 Location: ${match.location}
+💡 Turn-ons: ${match.turnOns}`;
+
+        await ctx.replyWithPhoto(match.photoUrl, {
+            caption: profileCaption,
+            reply_markup: Markup.inlineKeyboard([
+                [Markup.button.callback("❤️ Like", `like_${match.userId}`)],
+                [Markup.button.callback("❌ Dislike", `dislike_${match.userId}`)]
+            ])
+        });
+    } catch (error) {
+        console.error("Error sending match:", error);
+        ctx.reply("⚠️ Could not send match profile. Please try again.");
+    }
+}
+
 
 
 // 🚀 Launch the bot
