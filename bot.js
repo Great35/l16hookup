@@ -363,14 +363,15 @@ bot.action(/^like_(.*)$/, async (ctx) => {
                     ]),
                 }
             );
-
-            setTimeout(async () => {
-                await findNextMatch(ctx);
-            }, 5000);
-            return;
         }
 
-        await findNextMatch(ctx);
+        // ✅ Instead of auto-finding, show the "Find Your Next Fling" button
+        await ctx.reply(
+            "🔍 Ready for the next match?",
+            Markup.inlineKeyboard([
+                [Markup.button.callback("🔍 Find Your Next Fling", "find_match")],
+            ])
+        );
     } catch (error) {
         console.error("❌ Error in like action:", error);
         ctx.reply("⚠️ Oops! Something went wrong. Try again.");
