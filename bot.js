@@ -383,10 +383,9 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         const dislikedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
-        // ✅ Fetch user data to check subscription status
+        // Fetch user data to check subscription status
         const currentUser = await usersCollection.findOne({ userId });
 
-        // ✅ Insert dislike action
         await swipesCollection.insertOne({
             userId,
             targetUserId: dislikedUserId,
@@ -394,11 +393,10 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
             timestamp: new Date(),
         });
 
-        // ✅ Track user dislikes
         if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
         userDislikeCounts[userId]++;
 
-        // ✅ Only show the upgrade message if the user is NOT subscribed
+        // Only show the upgrade message if the user is NOT subscribed
         if (userDislikeCounts[userId] % 5 === 0 && (!currentUser || !currentUser.isSubscribed)) {
             await ctx.reply(
                 "🚀 Unlock premium profiles and see who likes you instantly!",
@@ -411,7 +409,6 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
             );
         }
 
-        // ✅ Automatically find the next match
         await findNextMatch(ctx);
     } catch (error) {
         console.error("❌ Error in dislike action:", error);
@@ -424,6 +421,14 @@ bot.action("find_match", async (ctx) => {
     await findNextMatch(ctx);
 });
 
+
+
+// 🚀 Launch the bot
+bot.launch().then(() => {
+    console.log('🚀 Lemon16 is up and running!');
+}).catch((err) => {
+    console.error('❌ Error starting bot:', err);
+});
 
 // 🛑 Graceful Shutdown
 process.once('SIGINT', async () => {
