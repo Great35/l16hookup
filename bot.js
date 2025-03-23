@@ -385,19 +385,20 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
 
         // ✅ Fetch the current user
         const currentUser = await usersCollection.findOne({ userId });
+        if (!currentUser) return ctx.reply("❌ User not found. Please restart the bot.");
 
-        if (!currentUser) {
-            return ctx.reply("❌ User not found. Please restart the bot.");
-        }
+        // ✅ Fetch the disliked user's info
+        const dislikedUser = await usersCollection.findOne({ userId: dislikedUserId });
+        const dislikedUserName = dislikedUser ? dislikedUser.name : "Unknown User";
 
-        // ✅ Update user's dislikedUsers array in MongoDB
+        // ✅ Update the current user's disliked list
         await usersCollection.updateOne(
             { userId },
-            { $addToSet: { dislikedUsers: dislikedUserId } } // Ensures unique dislikes
+            { $addToSet: { dislikedUsers: dislikedUserId } }
         );
 
-        // ✅ Notify the user
-        await ctx.reply(`👎 You disliked ${dislikedUserId}. Finding the next match...`);
+        // ✅ Notify the user with the disliked user's name
+        await ctx.reply(`👎 You disliked *${dislikedUserName}*. Finding the next match...`, { parse_mode: "Markdown" });
 
         // ✅ Automatically find the next match
         await findNextMatch(ctx);
@@ -411,6 +412,7 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
 bot.action("find_match", async (ctx) => {
     await findNextMatch(ctx);
 });
+
 
 
 // 🚀 Launch the bot
