@@ -35,7 +35,7 @@ async function connectDB() {
         process.exit(1);
     }
 }
-
+const swipesCollection = db.collection("swipes");
 connectDB();
 const checkSubscriptionExpiry = async () => {
     try {
