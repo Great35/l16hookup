@@ -383,36 +383,21 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         const dislikedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
-        // ✅ Fetch user data to check subscription status
+        // ✅ Fetch the current user
         const currentUser = await usersCollection.findOne({ userId });
 
-        // ✅ Save the dislike in the database
-        await swipesCollection.insertOne({
-            userId,
-            targetUserId: dislikedUserId,
-            action: "dislike",
-            timestamp: new Date(),
-        });
-
-        // ✅ Track dislikes per user
-        if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
-        userDislikeCounts[userId]++;
-
-        // ✅ Notify the user that they disliked someone
-        await ctx.reply(`👎 You disliked this profile. Finding the next match...`);
-
-        // ✅ Offer subscription after 5 dislikes if not subscribed
-        if (userDislikeCounts[userId] % 5 === 0 && (!currentUser || !currentUser.isSubscribed)) {
-            await ctx.reply(
-                "🚀 Unlock premium profiles and see who likes you instantly!",
-                {
-                    parse_mode: "Markdown",
-                    reply_markup: Markup.inlineKeyboard([
-                        [Markup.button.url("💎 Upgrade Now", "https://t.me/YourPaymentBot")],
-                    ]),
-                }
-            );
+        if (!currentUser) {
+            return ctx.reply("❌ User not found. Please restart the bot.");
         }
+
+        // ✅ Update user's dislikedUsers array in MongoDB
+        await usersCollection.updateOne(
+            { userId },
+            { $addToSet: { dislikedUsers: dislikedUserId } } // Ensures unique dislikes
+        );
+
+        // ✅ Notify the user
+        await ctx.reply(`👎 You disliked ${dislikedUserId}. Finding the next match...`);
 
         // ✅ Automatically find the next match
         await findNextMatch(ctx);
