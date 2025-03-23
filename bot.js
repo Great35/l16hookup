@@ -238,6 +238,9 @@ async function sendMatchProfile(ctx, user, match) {
 
 // 🟢 Handle Like and Dislike Actions
 const matchAttempts = {}; // Track auto-match count for each user
+const userDislikeCounts = {}; // ✅ FIXED: Declared properly
+
+// ✅ Find Next Match Function
 async function findNextMatchV2(ctx) {
     try {
         const userId = ctx.from.id;
@@ -303,11 +306,9 @@ bot.action(/^like_(.*)$/, async (ctx) => {
         const likedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
-        // Fetch the current user
         const currentUser = await usersCollection.findOne({ userId });
         if (!currentUser) return ctx.reply("❌ Error: User not found.");
 
-        // Check swipe limit (for non-subscribers)
         if (currentUser.swipeCount <= 0 && !currentUser.isSubscribed) {
             return ctx.reply(
                 "🔒 You've reached your daily swipe limit! Upgrade to unlimited swipes.",
@@ -317,17 +318,14 @@ bot.action(/^like_(.*)$/, async (ctx) => {
             );
         }
 
-        // Update liked users list & decrement swipe count if needed
         await usersCollection.updateOne(
             { userId },
             { $push: { likedUsers: likedUserId }, $inc: { swipeCount: currentUser.isSubscribed ? 0 : -1 } }
         );
 
-        // Fetch the liked user
         const likedUser = await usersCollection.findOne({ userId: likedUserId });
         if (!likedUser) return ctx.reply("❌ Error: Liked user not found.");
 
-        // Check if it's a match
         if (likedUser.likedUsers.includes(userId)) {
             let matchMessageForUser = `🎉 *It's a match!* You and *${likedUser.name}* are into each other!`;
             let matchMessageForLikedUser = `🎉 *It's a match!* You and *${currentUser.name}* are into each other!`;
@@ -370,7 +368,6 @@ bot.action(/^like_(.*)$/, async (ctx) => {
             return;
         }
 
-        // Auto-find next match
         await findNextMatchV2(ctx);
     } catch (error) {
         console.error("❌ Error in like action:", error);
@@ -378,23 +375,20 @@ bot.action(/^like_(.*)$/, async (ctx) => {
     }
 });
 
-// ✅ Handle Dislike Action
+// ✅ Handle Dislike Action (Fixed)
 bot.action(/^dislike_(.*)$/, async (ctx) => {
     try {
         const dislikedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
-        // Update disliked users list
         await usersCollection.updateOne(
             { userId },
             { $push: { dislikedUsers: dislikedUserId } }
         );
 
-        // Get user details
         const currentUser = await usersCollection.findOne({ userId });
 
-        // Track dislikes per user
-        if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
+        if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0; // ✅ FIXED
         userDislikeCounts[userId]++;
 
         if (userDislikeCounts[userId] % 5 === 0 && !currentUser.isSubscribed) {
@@ -420,7 +414,6 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
             );
         }
 
-        // Auto-find next match
         await ctx.reply("❌ You disliked this profile. Finding another match...");
         await findNextMatchV2(ctx);
     } catch (error) {
@@ -428,6 +421,7 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         ctx.reply("🚨 An error occurred while processing your dislike. Please try again.");
     }
 });
+
 
 // 🚀 Launch the bot
 bot.launch().then(() => {
