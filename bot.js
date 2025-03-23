@@ -383,17 +383,18 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         const dislikedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
-        await swipesCollection.insertOne({
-            userId,
-            targetUserId: dislikedUserId,
-            action: "dislike",
-            timestamp: new Date(),
-        });
+        // ✅ Fetch user data to check subscription status
+        const currentUser = await usersCollection.findOne({ userId });
 
+        // ✅ Track dislikes per user
         if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
         userDislikeCounts[userId]++;
 
-        if (userDislikeCounts[userId] % 5 === 0 && !currentUser.isSubscribed) {
+        // ✅ Notify the user that they disliked someone
+        await ctx.reply(`👎 You disliked this profile. Finding the next match...`);
+
+        // ✅ Offer subscription after 5 dislikes if not subscribed
+        if (userDislikeCounts[userId] % 5 === 0 && (!currentUser || !currentUser.isSubscribed)) {
             await ctx.reply(
                 "🚀 Unlock premium profiles and see who likes you instantly!",
                 {
@@ -405,6 +406,7 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
             );
         }
 
+        // ✅ Automatically find the next match
         await findNextMatch(ctx);
     } catch (error) {
         console.error("❌ Error in dislike action:", error);
