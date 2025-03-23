@@ -309,13 +309,13 @@ bot.action(/^like_(.*)$/, async (ctx) => {
 
             // Auto-find next match after 5 seconds
             setTimeout(async () => {
-                await findNextMatch(ctx);
+                await findNextMatchV2(ctx);
             }, 5000);
             return;
         }
 
         // If not a match, find the next potential match
-        await findNextMatch(ctx);
+        await findNextMatchV2(ctx);
 
     } catch (error) {
         console.error("❌ Error in like action:", error);
@@ -323,51 +323,56 @@ bot.action(/^like_(.*)$/, async (ctx) => {
     }
 });
 
-async function findNextMatch(ctx) {
-    try {
-        const userId = ctx.from.id;
-        if (!matchAttempts[userId]) matchAttempts[userId] = 0;
+// Ensure the function is only declared once
+if (!global.findNextMatchDeclared) {
+    global.findNextMatchDeclared = true;
 
-        if (matchAttempts[userId] >= 3) {
-            await ctx.reply("💡 Need more matches? Click below to continue!", {
-                reply_markup: Markup.inlineKeyboard([
-                    [Markup.button.callback("🔍 Find Another Match", "find_match")]
-                ])
+    async function findNextMatchV2(ctx) {
+        try {
+            const userId = ctx.from.id;
+            if (!matchAttempts[userId]) matchAttempts[userId] = 0;
+
+            if (matchAttempts[userId] >= 3) {
+                await ctx.reply("💡 Need more matches? Click below to continue!", {
+                    reply_markup: Markup.inlineKeyboard([
+                        [Markup.button.callback("🔍 Find Another Match", "find_match")]
+                    ])
+                });
+
+                matchAttempts[userId] = 0;
+                return;
+            }
+
+            const currentUser = await usersCollection.findOne({ userId });
+            if (!currentUser) return ctx.reply("❌ Error: User not found.");
+
+            const nextMatch = await usersCollection.findOne({
+                userId: { $ne: userId },
+                likedUsers: { $ne: userId },
+                gender: currentUser.interestedIn,
+                interestedIn: currentUser.gender
             });
 
-            matchAttempts[userId] = 0;
-            return;
+            if (!nextMatch) return ctx.reply("😢 No more matches available. Try again later!");
+
+            await ctx.telegram.sendPhoto(
+                userId,
+                nextMatch.profilePic,
+                {
+                    caption: `💘 *New Match Suggestion*:\n📛 Name: *${nextMatch.name}*\n🎂 Age: ${nextMatch.age}\n📍 Location: ${nextMatch.location}`,
+                    parse_mode: "Markdown",
+                    reply_markup: Markup.inlineKeyboard([
+                        [Markup.button.callback("❤️ Like", `like_${nextMatch.userId}`)],
+                        [Markup.button.callback("❌ Dislike", `dislike_${nextMatch.userId}`)]
+                    ])
+                }
+            );
+
+            matchAttempts[userId]++;
+        } catch (error) {
+            console.error("❌ Error finding next match:", error);
+            ctx.reply("⚠️ Could not find the next match. Please try again.");
         }
-
-        const currentUser = await usersCollection.findOne({ userId });
-        if (!currentUser) return ctx.reply("❌ Error: User not found.");
-
-        const nextMatch = await usersCollection.findOne({
-            userId: { $ne: userId },
-            likedUsers: { $ne: userId },
-            gender: currentUser.interestedIn,
-            interestedIn: currentUser.gender
-        });
-
-        if (!nextMatch) return ctx.reply("😢 No more matches available. Try again later!");
-
-        await ctx.telegram.sendPhoto(
-            userId,
-            nextMatch.profilePic,
-            {
-                caption: `💘 *New Match Suggestion*:\n📛 Name: *${nextMatch.name}*\n🎂 Age: ${nextMatch.age}\n📍 Location: ${nextMatch.location}`,
-                parse_mode: "Markdown",
-                reply_markup: Markup.inlineKeyboard([
-                    [Markup.button.callback("❤️ Like", `like_${nextMatch.userId}`)],
-                    [Markup.button.callback("❌ Dislike", `dislike_${nextMatch.userId}`)]
-                ])
-            }
-        );
-
-        matchAttempts[userId]++;
-    } catch (error) {
-        console.error("❌ Error finding next match:", error);
-        ctx.reply("⚠️ Could not find the next match. Please try again.");
     }
 }
 
