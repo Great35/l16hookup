@@ -383,6 +383,9 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         const dislikedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
+        // Fetch user data to check subscription status
+        const currentUser = await usersCollection.findOne({ userId });
+
         await swipesCollection.insertOne({
             userId,
             targetUserId: dislikedUserId,
@@ -393,7 +396,8 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
         userDislikeCounts[userId]++;
 
-        if (userDislikeCounts[userId] % 5 === 0 && !currentUser.isSubscribed) {
+        // Only show the upgrade message if the user is NOT subscribed
+        if (userDislikeCounts[userId] % 5 === 0 && (!currentUser || !currentUser.isSubscribed)) {
             await ctx.reply(
                 "🚀 Unlock premium profiles and see who likes you instantly!",
                 {
@@ -411,6 +415,7 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
         ctx.reply("🚨 An error occurred. Try again.");
     }
 });
+
 
 // ✅ Handle Find Match Button
 bot.action("find_match", async (ctx) => {
