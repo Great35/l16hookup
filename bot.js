@@ -244,7 +244,7 @@ bot.action(/^like_(.*)$/, async (ctx) => {
         const likedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
-        // Fetch the user
+        // Fetch the current user
         const currentUser = await usersCollection.findOne({ userId });
         if (!currentUser) return ctx.reply("❌ Error: User not found.");
 
@@ -287,7 +287,7 @@ bot.action(/^like_(.*)$/, async (ctx) => {
             // Send match notifications with profile images
             await ctx.telegram.sendPhoto(
                 userId,
-                likedUser.profilePic,
+                likedUser.profilePic || "https://via.placeholder.com/150",
                 {
                     caption: matchMessageForUser,
                     parse_mode: "Markdown",
@@ -297,7 +297,7 @@ bot.action(/^like_(.*)$/, async (ctx) => {
 
             await ctx.telegram.sendPhoto(
                 likedUser.userId,
-                currentUser.profilePic,
+                currentUser.profilePic || "https://via.placeholder.com/150",
                 {
                     caption: matchMessageForLikedUser,
                     parse_mode: "Markdown",
@@ -323,7 +323,25 @@ bot.action(/^like_(.*)$/, async (ctx) => {
     }
 });
 
-// Ensure the function is only declared once
+// ❌ Handle Dislike Action
+bot.action(/^dislike_(.*)$/, async (ctx) => {
+    try {
+        const dislikedUserId = parseInt(ctx.match[1]);
+        const userId = ctx.from.id;
+
+        await usersCollection.updateOne(
+            { userId },
+            { $push: { dislikedUsers: dislikedUserId } }
+        );
+
+        await findNextMatchV2(ctx);
+    } catch (error) {
+        console.error("❌ Error in dislike action:", error);
+        ctx.reply("⚠️ Oops! Something went wrong. Please try again.");
+    }
+});
+
+// ✅ Ensure findNextMatchV2 is declared only once
 if (!global.findNextMatchDeclared) {
     global.findNextMatchDeclared = true;
 
@@ -357,7 +375,7 @@ if (!global.findNextMatchDeclared) {
 
             await ctx.telegram.sendPhoto(
                 userId,
-                nextMatch.profilePic,
+                nextMatch.profilePic || "https://via.placeholder.com/150",
                 {
                     caption: `💘 *New Match Suggestion*:\n📛 Name: *${nextMatch.name}*\n🎂 Age: ${nextMatch.age}\n📍 Location: ${nextMatch.location}`,
                     parse_mode: "Markdown",
