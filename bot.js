@@ -237,43 +237,43 @@ async function sendMatchProfile(ctx, user, match) {
 }
 
 // 🟢 Handle Like and Dislike Actions
-const matchAttempts = {}; // Track auto-match count for each user
-const userDislikeCounts = {}; // ✅ FIXED: Declared properly
+const matchAttempts = {};
+const userDislikeCounts = {};
 
-// ✅ Find Next Match Function
-async function findNextMatchV2(ctx) {
+// ✅ Find Next Match (Improved)
+async function findNextMatch(ctx) {
     try {
         const userId = ctx.from.id;
         if (!matchAttempts[userId]) matchAttempts[userId] = 0;
 
         if (matchAttempts[userId] >= 3) {
-            await ctx.reply("💡 Need more matches? Click below to continue!", {
+            await ctx.reply("💡 Need more matches? Click below!", {
                 reply_markup: Markup.inlineKeyboard([
                     [Markup.button.callback("🔍 Find Another Match", "find_match")],
                 ]),
             });
-
             matchAttempts[userId] = 0;
             return;
         }
 
         const currentUser = await usersCollection.findOne({ userId });
-        if (!currentUser) return ctx.reply("❌ Error: User not found.");
+        if (!currentUser) return ctx.reply("❌ User not found.");
 
         const nextMatch = await usersCollection.findOne({
             userId: { $ne: userId },
             likedUsers: { $ne: userId },
+            dislikedUsers: { $ne: userId },
             gender: currentUser.interestedIn,
             interestedIn: currentUser.gender,
         });
 
-        if (!nextMatch) return ctx.reply("😢 No more matches available. Try again later!");
+        if (!nextMatch) return ctx.reply("😢 No more matches available. Try later!");
 
         await sendMatch(ctx, nextMatch);
         matchAttempts[userId]++;
     } catch (error) {
-        console.error("❌ Error finding next match:", error);
-        ctx.reply("⚠️ Could not find the next match. Please try again.");
+        console.error("❌ Error finding match:", error);
+        ctx.reply("⚠️ Could not find a match. Try again.");
     }
 }
 
@@ -296,7 +296,7 @@ async function sendMatch(ctx, match) {
         });
     } catch (error) {
         console.error("❌ Error sending match:", error);
-        ctx.reply("⚠️ Could not send match profile. Please try again.");
+        ctx.reply("⚠️ Could not send match profile. Try again.");
     }
 }
 
@@ -307,13 +307,14 @@ bot.action(/^like_(.*)$/, async (ctx) => {
         const userId = ctx.from.id;
 
         const currentUser = await usersCollection.findOne({ userId });
-        if (!currentUser) return ctx.reply("❌ Error: User not found.");
+        if (!currentUser) return ctx.reply("❌ User not found.");
 
+        // ✅ Check swipe limit
         if (currentUser.swipeCount <= 0 && !currentUser.isSubscribed) {
             return ctx.reply(
                 "🔒 You've reached your daily swipe limit! Upgrade to unlimited swipes.",
                 Markup.inlineKeyboard([
-                    [Markup.button.url("🔥 Upgrade Now", "https://t.me/YourOtherBotUsername")],
+                    [Markup.button.url("🔥 Upgrade Now", "https://t.me/YourPaymentBot")],
                 ])
             );
         }
@@ -326,9 +327,10 @@ bot.action(/^like_(.*)$/, async (ctx) => {
         const likedUser = await usersCollection.findOne({ userId: likedUserId });
         if (!likedUser) return ctx.reply("❌ Error: Liked user not found.");
 
+        // ✅ Check if it's a match
         if (likedUser.likedUsers.includes(userId)) {
-            let matchMessageForUser = `🎉 *It's a match!* You and *${likedUser.name}* are into each other!`;
-            let matchMessageForLikedUser = `🎉 *It's a match!* You and *${currentUser.name}* are into each other!`;
+            let matchMessageForUser = `🎉 *It's a match!* You and *${likedUser.name}* like each other!`;
+            let matchMessageForLikedUser = `🎉 *It's a match!* You and *${currentUser.name}* like each other!`;
 
             if (currentUser.isSubscribed) {
                 matchMessageForUser += `\n\n🔗 *Username:* @${likedUser.username}`;
@@ -337,7 +339,7 @@ bot.action(/^like_(.*)$/, async (ctx) => {
             }
 
             const upgradeButton = Markup.inlineKeyboard([
-                [Markup.button.url("💎 Upgrade to Premium", "https://t.me/YourPaymentBotUsername")],
+                [Markup.button.url("💎 Upgrade to Premium", "https://t.me/YourPaymentBot")],
             ]);
 
             await ctx.telegram.sendPhoto(
@@ -363,37 +365,37 @@ bot.action(/^like_(.*)$/, async (ctx) => {
             );
 
             setTimeout(async () => {
-                await findNextMatchV2(ctx);
+                await findNextMatch(ctx);
             }, 5000);
             return;
         }
 
-        await findNextMatchV2(ctx);
+        await findNextMatch(ctx);
     } catch (error) {
         console.error("❌ Error in like action:", error);
-        ctx.reply("⚠️ Oops! Something went wrong. Please try again.");
+        ctx.reply("⚠️ Oops! Something went wrong. Try again.");
     }
 });
 
-// ✅ Handle Dislike Action (Fixed)
+// ✅ Handle Dislike Action
 bot.action(/^dislike_(.*)$/, async (ctx) => {
     try {
         const dislikedUserId = parseInt(ctx.match[1]);
         const userId = ctx.from.id;
 
-        await usersCollection.updateOne(
-            { userId },
-            { $push: { dislikedUsers: dislikedUserId } }
-        );
+        await swipesCollection.insertOne({
+            userId,
+            targetUserId: dislikedUserId,
+            action: "dislike",
+            timestamp: new Date(),
+        });
 
-        const currentUser = await usersCollection.findOne({ userId });
-
-        if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0; // ✅ FIXED
+        if (!userDislikeCounts[userId]) userDislikeCounts[userId] = 0;
         userDislikeCounts[userId]++;
 
         if (userDislikeCounts[userId] % 5 === 0 && !currentUser.isSubscribed) {
             await ctx.reply(
-                "🚀 *Tired of swiping?* Unlock premium profiles and see who likes you instantly!",
+                "🚀 Unlock premium profiles and see who likes you instantly!",
                 {
                     parse_mode: "Markdown",
                     reply_markup: Markup.inlineKeyboard([
@@ -403,24 +405,18 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
             );
         }
 
-        if (userDislikeCounts[userId] % 3 === 0) {
-            return ctx.reply(
-                "⚡ You've disliked 3 profiles. Tap below to find another match!",
-                {
-                    reply_markup: Markup.inlineKeyboard([
-                        [Markup.button.callback("🔍 Find Another Match", "find_match")],
-                    ]),
-                }
-            );
-        }
-
-        await ctx.reply("❌ You disliked this profile. Finding another match...");
-        await findNextMatchV2(ctx);
+        await findNextMatch(ctx);
     } catch (error) {
         console.error("❌ Error in dislike action:", error);
-        ctx.reply("🚨 An error occurred while processing your dislike. Please try again.");
+        ctx.reply("🚨 An error occurred. Try again.");
     }
 });
+
+// ✅ Handle Find Match Button
+bot.action("find_match", async (ctx) => {
+    await findNextMatch(ctx);
+});
+
 
 
 // 🚀 Launch the bot
