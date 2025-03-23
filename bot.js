@@ -241,55 +241,41 @@ const matchAttempts = {};
 const userDislikeCounts = {};
 
 // ✅ Find Next Match (Improved)
-// ✅ Improved Find Next Match Function
 async function findNextMatch(ctx) {
     try {
         const userId = ctx.from.id;
+        if (!matchAttempts[userId]) matchAttempts[userId] = 0;
 
-        // ✅ Fetch current user
+        if (matchAttempts[userId] >= 3) {
+            await ctx.reply("💡 Need more matches? Click below!", {
+                reply_markup: Markup.inlineKeyboard([
+                    [Markup.button.callback("🔍 Find Another Match", "find_match")],
+                ]),
+            });
+            matchAttempts[userId] = 0;
+            return;
+        }
+
         const currentUser = await usersCollection.findOne({ userId });
         if (!currentUser) return ctx.reply("❌ User not found.");
 
-        // ✅ Find potential matches
-        const potentialMatches = await usersCollection.find({
-            userId: { $ne: userId }, // Exclude self
-            gender: currentUser.interestedIn === "everyone" ? { $in: ["male", "female", "other"] } : currentUser.interestedIn, // Gender filtering
-            interestedIn: { $in: [currentUser.gender, "everyone"] }, // Interest matching
-            userId: { $nin: [...currentUser.likedUsers, ...currentUser.dislikedUsers] } // Exclude already swiped users
-        }).toArray();
+        const nextMatch = await usersCollection.findOne({
+            userId: { $ne: userId },
+            likedUsers: { $ne: userId },
+            dislikedUsers: { $ne: userId },
+            gender: currentUser.interestedIn,
+            interestedIn: currentUser.gender,
+        });
 
-        if (potentialMatches.length === 0) {
-            return ctx.reply("😢 No new matches available. Check back later!");
-        }
+        if (!nextMatch) return ctx.reply("😢 No more matches available. Try later!");
 
-        // ✅ Select a random match
-        const match = potentialMatches[Math.floor(Math.random() * potentialMatches.length)];
-
-        await sendMatchProfile(ctx, match);
+        await sendMatch(ctx, nextMatch);
+        matchAttempts[userId]++;
     } catch (error) {
-        console.error("❌ Error in findNextMatch:", error);
+        console.error("❌ Error finding match:", error);
         ctx.reply("⚠️ Could not find a match. Try again.");
     }
 }
-
-// ✅ Improved Send Match Profile
-async function sendMatchProfile(ctx, match) {
-    let profileText = `💘 *Match Found:*
-📛 *Name:* ${match.name}
-🎂 *Age:* ${match.age}
-📍 *Location:* ${match.location}
-💡 *Turn-ons:* ${match.interests}`;
-
-    await ctx.replyWithPhoto(match.profilePic, {
-        caption: profileText,
-        parse_mode: "Markdown",
-        reply_markup: Markup.inlineKeyboard([
-            [Markup.button.callback("❤️ Like", `like_${match.userId}`)],
-            [Markup.button.callback("❌ Dislike", `dislike_${match.userId}`)]
-        ])
-    });
-}
-
 
 // ✅ Send Match Function
 async function sendMatch(ctx, match) {
@@ -426,7 +412,6 @@ bot.action(/^dislike_(.*)$/, async (ctx) => {
 bot.action("find_match", async (ctx) => {
     await findNextMatch(ctx);
 });
-
 
 
 // 🚀 Launch the bot
