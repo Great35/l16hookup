@@ -314,7 +314,7 @@ bot.action(/^like_(.*)$/, async (ctx) => {
             return ctx.reply(
                 "🔒 You've reached your daily swipe limit! Upgrade to unlimited swipes.",
                 Markup.inlineKeyboard([
-                    [Markup.button.url("🔥 Upgrade Now", "https://t.me/YourPaymentBot")],
+                    [Markup.button.url("🔥 Upgrade Now", " https://t.me/lemon16pay_bot")],
                 ])
             );
         }
@@ -339,7 +339,7 @@ bot.action(/^like_(.*)$/, async (ctx) => {
             }
 
             const upgradeButton = Markup.inlineKeyboard([
-                [Markup.button.url("💎 Upgrade to Premium", "https://t.me/YourPaymentBot")],
+                [Markup.button.url("💎 Upgrade to Premium", " https://t.me/lemon16pay_bot")],
             ]);
 
             await ctx.telegram.sendPhoto(
