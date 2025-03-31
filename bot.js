@@ -90,7 +90,7 @@ bot.start(async (ctx) => {
     }
 
     ctx.session = { userId };
-    await ctx.reply("👋 Hey, sexy! Welcome to Lemon16 hoockups🍑   where the chemistry is electric and the nights are unforgettable. 🍋💋    Let’s get you set up. First, what’s your name? 😉");
+    await ctx.reply("👋 Hey, sexy! Welcome to Lemon16 Dating platform🍑   where you Meet New People, Make Friends, Chat, Flirt and explore 🍋💋    Let’s get you set up. First, what’s your name? 😉");
 });
 
 // 🟢 Handle Onboarding Questions in Sequence
